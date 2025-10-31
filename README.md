@@ -55,3 +55,35 @@ lưu/truy xuất chữ ký.
 
 
 #### Bài làm:
+##### 1. Cấu trúc PDF liên quan chữ ký:
+######
+  - Catalog (/Root) — entry tới /AcroForm nếu PDF có form. (gốc của cấu trúc form). 
+  - Pages tree (/Pages) → Page object (/Page) — chứa /Contents (content streams), /Resources, /Annots (signature widget là một annotation trong /Annots). 
+  - Resources — fonts, XObjects (gắn appearance của chữ ký).
+  - Content streams — nội dung hiển thị trang (không chứa thông tin chữ ký số trực tiếp trừ khi appearance được nhúng).
+  - XObject — dùng để hiển thị "appearance" (hình dấu) chữ ký nếu visible signature.
+  - AcroForm (/AcroForm) — chứa form fields (bao gồm signature fields). Field refs -> widget annotations. 
+  - Signature field (widget) — field object (type /Sig trong /Kids), widget annotation có /FT /Sig. Widget tham chiếu Signature dictionary qua key /V (value = signature dictionary). 
+  - Signature dictionary (/Sig /V) — object chứa metadata chữ ký: /Type /Sig, /Filter, /SubFilter (ví dụ adbe.pkcs7.detached), /ByteRange (mảng 4 số), /Contents (hex/byte string chứa PKCS#7/CMS), /M (mod date), /Name, /Location, /Reason. /Reference entry có thể dùng theo PDF 2.0 extensions. 
+  - /ByteRange — cực kỳ quan trọng: định nghĩa 2 vùng byte (offset + length) trên file để tính digest
+  - /Contents không được tham gia digest vì nó chứa chữ ký. Nếu /ByteRange sai thì chữ ký sẽ fail.
+  - Incremental updates — chữ ký thường được thêm bằng append (incremental) để bảo toàn bytes gốc; mỗi lần ký thêm tạo một update segment mới. 
+  - DSS (PAdES) — dictionary top-level (ví dụ /DSS) chứa /Certs (chain), /CRLs, /OCSPs, /VRI (validation related info) để xác thực lâu dài (LTV). Đây là phần của PAdES profile.
+
+Các object refs:
+  - /Root (Catalog) — điểm vào; trỏ tới /Pages và /AcroForm. (điểm lookup đầu tiên). 
+  - /Pages (Pages tree node) — tổ chức các trang; dẫn xuống Page object.
+  - /Page — chứa /Contents, /Resources, /Annots (widget). Nếu muốn vẽ visual signature, appearance XObject gắn ở đây.
+  - /Contents (page stream) — hiển thị nội dung, không chứa chữ ký số (trừ appearance).
+  - /Annots[] (widget annotation) — annotation cho field (hiển thị hộp chữ ký, vùng click). Widget trỏ tới field dictionary.
+  - /AcroForm — chứa Fields array (tham chiếu tới SigField objects). SigField là field dictionary (tên, kiểu /FT /Sig). 
+  - SigField object — định danh field (tên), có /V key -> Signature dictionary (nội dung chữ ký).
+  - Signature dictionary (SigDict /V) — chứa /ByteRange, /Contents (PKCS#7), /Filter//SubFilter, metadata. Khi ký, trình ký sẽ viết vào /Contents. Nếu dùng CMS/PKCS#7 thì /SubFilter thường là adbe.pkcs7.detached hoặc adbe.pkcs7.sha1 (các giá trị cũ/ngày xưa). 
+  - Incremental update object(s) — phần appended bytes sau cross-reference cũ; giữ lịch sử các thay đổi, cho phép nhiều chữ ký.
+  - /DSS (PAdES) — dictionary chứa chứng thư/OCSP/CRL/VRI để hỗ trợ xác thực về lâu dài. (không bắt buộc cho PDF, nhưng bắt buộc nếu muốn PAdES-LTV).
+
+
+##### 2. Vị trí lưu thời gian ký
+######
+Vị trí có thể lưu thông tin thời gian:
+  - 
